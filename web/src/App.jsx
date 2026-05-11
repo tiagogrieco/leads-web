@@ -99,10 +99,18 @@ export default function App() {
             return;
         }
         setLoading(true);
-        fetch(`${API}/search?${queryString}`)
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 90_000); // 90s timeout
+        fetch(`${API}/search?${queryString}`, { signal: ctrl.signal })
             .then(r => r.json())
-            .then(d => { setData(d); setLoading(false); })
-            .catch(() => setLoading(false));
+            .then(d => { setData(d); setLoading(false); clearTimeout(tid); })
+            .catch((e) => {
+                setLoading(false);
+                clearTimeout(tid);
+                if (e.name === "AbortError") {
+                    setData({ total: 0, rows: [], _err: "Busca demorou demais. Adicione mais filtros (município, segmento mais específico)." });
+                }
+            });
     };
 
     useEffect(() => { search(); }, [queryString]);
@@ -283,12 +291,17 @@ export default function App() {
                     </div>
 
                     <div className="mb-3 flex items-center justify-between">
-                        <div className="text-sm text-gray-600">
+                        <div className="text-sm text-gray-600 flex items-center gap-2">
+                            {loading && (
+                                <span className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent" />
+                            )}
                             {loading
-                                ? "Buscando..."
-                                : hasSelectiveFilter
-                                    ? `${data.total.toLocaleString("pt-BR")} leads encontrados`
-                                    : "Selecione um segmento ou município"}
+                                ? <span>Buscando<span className="text-xs text-gray-400 ml-2">(pode demorar 5-30s sem cidade)</span></span>
+                                : data._err
+                                    ? <span className="text-red-600 text-xs">⚠️ {data._err}</span>
+                                    : hasSelectiveFilter
+                                        ? <span>{data.total.toLocaleString("pt-BR")} leads encontrados</span>
+                                        : <span>Selecione um segmento ou município</span>}
                         </div>
                         <div className="flex gap-2">
                             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
