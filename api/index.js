@@ -28,7 +28,12 @@ function buildWhere(q) {
 
     if (q.uf) where.push(`e.uf = ${push(String(q.uf).toUpperCase())}`);
     if (q.municipio_cod) where.push(`e.municipio_cod = ${push(String(q.municipio_cod))}`);
-    if (q.cnae_prefix) where.push(`e.cnae_principal LIKE ${push(q.cnae_prefix + "%")}`);
+    if (q.cnae_prefix) {
+        // BETWEEN usa indice B-tree padrao + e mais rapido que LIKE
+        const lo = push(q.cnae_prefix);
+        const hi = push(q.cnae_prefix + "￿");
+        where.push(`e.cnae_principal >= ${lo} AND e.cnae_principal < ${hi}`);
+    }
     if (q.cnae) where.push(`e.cnae_principal = ${push(String(q.cnae))}`);
     where.push(`e.situacao = ${push(q.situacao || "02")}`);
     if (q.porte) {
@@ -86,7 +91,12 @@ app.get("/search", async (req) => {
     const per = Math.min(200, Math.max(1, Number(q.per || 50)));
     const { sql: where, params } = buildWhere(q);
 
-    const countSql = `SELECT COUNT(*)::int AS total ${FROM_JOIN} ${where}`;
+    // COUNT sem JOIN - apenas tabela estabelecimentos (filtros sao todos nela)
+    // Filtros que dependem de empresas (porte) sao raros; deixa pra outro endpoint
+    const usesEmpresas = where.includes("emp.");
+    const countSql = usesEmpresas
+        ? `SELECT COUNT(*)::int AS total ${FROM_JOIN} ${where}`
+        : `SELECT COUNT(*)::int AS total FROM rf.estabelecimentos e ${where}`;
     const countRes = await pool.query(countSql, params);
     const total = countRes.rows[0].total;
 
@@ -94,7 +104,7 @@ app.get("/search", async (req) => {
         SELECT ${SELECT_COLS}
         ${FROM_JOIN}
         ${where}
-        ORDER BY emp.porte DESC NULLS LAST, emp.razao_social
+        ORDER BY e.cnpj_basico
         LIMIT ${per} OFFSET ${(page - 1) * per}
     `;
     const dataRes = await pool.query(dataSql, params);
