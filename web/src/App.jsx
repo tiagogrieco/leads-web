@@ -4,6 +4,36 @@ const API = "/api";
 const UFS = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
 const PORTES = ["DEMAIS","EPP","ME","NAO INFORMADO"];
 
+// Presets de segmento — clica e já filtra
+const PRESETS = [
+    { id: "salao",        emoji: "💇", label: "Salões de beleza",      cnae: "9602" },
+    { id: "estetica",     emoji: "💅", label: "Estética e cuidados",   cnae: "9602502" },
+    { id: "petshop",      emoji: "🐾", label: "Pet shops",              cnae: "4789004" },
+    { id: "vet",          emoji: "🩺", label: "Clínicas veterinárias",  cnae: "7500" },
+    { id: "academia",     emoji: "🏋️", label: "Academias",              cnae: "9313" },
+    { id: "supermercado", emoji: "🛒", label: "Super/mini mercados",    cnae: "4711" },
+    { id: "mini",         emoji: "🏪", label: "Mercearias / mini",      cnae: "4712" },
+    { id: "padaria",      emoji: "🥖", label: "Padarias",               cnae: "472110" },
+    { id: "restaurante",  emoji: "🍽️", label: "Restaurantes",           cnae: "5611" },
+    { id: "lanchonete",   emoji: "🍔", label: "Lanchonetes",            cnae: "561120" },
+    { id: "bar",          emoji: "🍺", label: "Bares",                  cnae: "561120" },
+    { id: "farmacia",     emoji: "💊", label: "Farmácias",              cnae: "4771" },
+    { id: "posto",        emoji: "⛽", label: "Postos de combustível",  cnae: "4731" },
+    { id: "hotel",        emoji: "🏨", label: "Hotéis e pousadas",      cnae: "5510" },
+    { id: "roupas",       emoji: "👔", label: "Lojas de roupas",        cnae: "4781" },
+    { id: "calcado",      emoji: "👟", label: "Lojas de calçados",      cnae: "4782" },
+    { id: "clinica",      emoji: "⚕️",  label: "Clínicas médicas",       cnae: "8630" },
+    { id: "odonto",       emoji: "🦷", label: "Clínicas odontológicas", cnae: "863050" },
+    { id: "escola",       emoji: "🏫", label: "Escolas",                cnae: "85" },
+    { id: "imobiliaria",  emoji: "🏠", label: "Imobiliárias",           cnae: "6810" },
+    { id: "construtora",  emoji: "🏗️", label: "Construtoras",           cnae: "412" },
+    { id: "transporte",   emoji: "🚚", label: "Transportadoras",        cnae: "4930" },
+    { id: "ind-alimento", emoji: "🥫", label: "Indústria alimentícia",  cnae: "10" },
+    { id: "ind-bebida",   emoji: "🍷", label: "Indústria de bebidas",   cnae: "11" },
+    { id: "ind-farma",    emoji: "💉", label: "Indústria farmacêutica", cnae: "21" },
+    { id: "ind-quimica",  emoji: "🧪", label: "Indústria química",      cnae: "20" },
+];
+
 export default function App() {
     const [filters, setFilters] = useState({
         uf: "GO", cnae_prefix: "", municipio_cod: "", porte: [], q: "",
@@ -214,6 +244,37 @@ export default function App() {
 
                 {/* Tabela */}
                 <main className="flex-1 p-6 overflow-auto">
+                    {/* Segmentos prontos */}
+                    <div className="mb-6">
+                        <h2 className="text-xs font-bold text-gray-600 uppercase mb-2">Segmentos rápidos</h2>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                            {PRESETS.map(p => {
+                                const active = filters.cnae_prefix === p.cnae;
+                                return (
+                                    <button
+                                        key={p.id}
+                                        onClick={() => {
+                                            setFilters(f => ({ ...f, cnae_prefix: active ? "" : p.cnae }));
+                                            setCnaeQ(active ? "" : `${p.cnae} — ${p.label}`);
+                                            setPage(1);
+                                        }}
+                                        className={`px-3 py-2 rounded-lg text-xs text-left border transition ${
+                                            active
+                                                ? "bg-primary text-white border-primary shadow"
+                                                : "bg-white text-ink border-gray-200 hover:border-primary hover:shadow-sm"
+                                        }`}
+                                    >
+                                        <div className="text-lg mb-0.5">{p.emoji}</div>
+                                        <div className="font-semibold leading-tight">{p.label}</div>
+                                        <div className={`text-[10px] font-mono ${active ? "text-white/70" : "text-gray-400"}`}>
+                                            CNAE {p.cnae}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                     <div className="mb-3 flex items-center justify-between">
                         <div className="text-sm text-gray-600">
                             {loading ? "Carregando..." : `${data.total.toLocaleString("pt-BR")} leads encontrados`}
