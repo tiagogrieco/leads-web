@@ -37,7 +37,9 @@ function buildWhere(q) {
     if (q.cnae) where.push(`e.cnae_principal = ${push(String(q.cnae))}`);
     where.push(`e.situacao = ${push(q.situacao || "02")}`);
     if (q.porte) {
-        const portes = String(q.porte).split(",").filter(Boolean);
+        // Frontend envia "ME"|"EPP"|"DEMAIS"|"NAO INFORMADO"; banco usa codigos 01,03,05,00
+        const PORTE_MAP = { "ME": "01", "EPP": "03", "DEMAIS": "05", "NAO INFORMADO": "00" };
+        const portes = String(q.porte).split(",").map(p => PORTE_MAP[p] || p).filter(Boolean);
         if (portes.length) where.push(`emp.porte = ANY(${push(portes)})`);
     }
     if (q.has_email === "true") where.push("e.email <> ''");
@@ -54,7 +56,7 @@ const SELECT_COLS = `
   e.cnpj_basico || e.cnpj_ordem || e.cnpj_dv AS cnpj,
   emp.razao_social,
   e.nome_fantasia,
-  emp.porte,
+  CASE emp.porte WHEN '01' THEN 'ME' WHEN '03' THEN 'EPP' WHEN '05' THEN 'DEMAIS' WHEN '00' THEN 'NAO INFORMADO' ELSE emp.porte END AS porte,
   emp.capital_social,
   e.cnae_principal AS cnae_codigo,
   c.descricao AS cnae_descricao,
