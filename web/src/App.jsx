@@ -90,7 +90,14 @@ export default function App() {
         return p.toString();
     }, [filters, page, per]);
 
+    // Só busca quando tem filtro seletivo (CNAE ou município), evita full table scan
+    const hasSelectiveFilter = !!(filters.cnae_prefix || filters.municipio_cod || filters.q);
+
     const search = () => {
+        if (!hasSelectiveFilter) {
+            setData({ total: 0, rows: [] });
+            return;
+        }
         setLoading(true);
         fetch(`${API}/search?${queryString}`)
             .then(r => r.json())
@@ -277,7 +284,11 @@ export default function App() {
 
                     <div className="mb-3 flex items-center justify-between">
                         <div className="text-sm text-gray-600">
-                            {loading ? "Carregando..." : `${data.total.toLocaleString("pt-BR")} leads encontrados`}
+                            {loading
+                                ? "Buscando..."
+                                : hasSelectiveFilter
+                                    ? `${data.total.toLocaleString("pt-BR")} leads encontrados`
+                                    : "Selecione um segmento ou município"}
                         </div>
                         <div className="flex gap-2">
                             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
@@ -317,7 +328,14 @@ export default function App() {
                                         <td className="px-3 py-2">{r.uf}</td>
                                     </tr>
                                 ))}
-                                {data.rows.length === 0 && !loading && (
+                                {data.rows.length === 0 && !loading && !hasSelectiveFilter && (
+                                    <tr><td colSpan={9} className="text-center py-12 text-gray-500">
+                                        <div className="text-3xl mb-2">👆</div>
+                                        <div className="font-semibold">Selecione um <span className="text-primary">segmento</span> acima ou digite um <span className="text-primary">município</span> pra começar</div>
+                                        <div className="text-xs text-gray-400 mt-1">(busca sem filtro varre 38M linhas e demora muito)</div>
+                                    </td></tr>
+                                )}
+                                {data.rows.length === 0 && !loading && hasSelectiveFilter && (
                                     <tr><td colSpan={9} className="text-center py-12 text-gray-400">Nenhum lead encontrado. Ajuste os filtros.</td></tr>
                                 )}
                             </tbody>

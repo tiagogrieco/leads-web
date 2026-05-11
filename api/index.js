@@ -169,12 +169,13 @@ app.get("/lookups/municipios", async (req) => {
 });
 
 app.get("/lookups/stats", async () => {
+    // Usa reltuples (estimativa) - INSTANTANEO vs COUNT(*) que demora minutos em 68M rows
     const r = await pool.query(`
         SELECT
-          (SELECT COUNT(*)::int FROM rf.estabelecimentos) AS estabelecimentos,
-          (SELECT COUNT(*)::int FROM rf.empresas) AS empresas,
-          (SELECT COUNT(DISTINCT uf) FROM rf.estabelecimentos) AS ufs,
-          (SELECT COUNT(*)::int FROM rf.cnaes) AS cnaes
+          (SELECT reltuples::bigint FROM pg_class WHERE oid = 'rf.estabelecimentos'::regclass) AS estabelecimentos,
+          (SELECT reltuples::bigint FROM pg_class WHERE oid = 'rf.empresas'::regclass) AS empresas,
+          (SELECT COUNT(*)::int FROM rf.cnaes) AS cnaes,
+          27 AS ufs
     `);
     return r.rows[0];
 });
