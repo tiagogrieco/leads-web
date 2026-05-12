@@ -75,32 +75,52 @@ export default function App() {
         return () => clearTimeout(t);
     }, [munQ]);
 
-    // Search
-    const queryString = useMemo(() => {
+    // Filtros aplicados (snapshot do clique no botao Buscar)
+    const [appliedFilters, setAppliedFilters] = useState(null);
+
+    const buildQS = (f, pg) => {
         const p = new URLSearchParams();
-        if (filters.uf) p.set("uf", filters.uf);
-        if (filters.cnae_prefix) p.set("cnae_prefix", filters.cnae_prefix);
-        if (filters.municipio_cod) p.set("municipio_cod", filters.municipio_cod);
-        if (filters.porte.length) p.set("porte", filters.porte.join(","));
-        if (filters.q) p.set("q", filters.q);
-        if (filters.has_phone) p.set("has_phone", "true");
-        if (filters.has_email) p.set("has_email", "true");
-        p.set("page", String(page));
+        if (f.uf) p.set("uf", f.uf);
+        if (f.cnae_prefix) p.set("cnae_prefix", f.cnae_prefix);
+        if (f.municipio_cod) p.set("municipio_cod", f.municipio_cod);
+        if (f.porte.length) p.set("porte", f.porte.join(","));
+        if (f.q) p.set("q", f.q);
+        if (f.has_phone) p.set("has_phone", "true");
+        if (f.has_email) p.set("has_email", "true");
+        p.set("page", String(pg));
         p.set("per", String(per));
         return p.toString();
-    }, [filters, page, per]);
+    };
 
-    // Só busca quando tem filtro seletivo (CNAE ou município), evita full table scan
+    const queryString = useMemo(
+        () => appliedFilters ? buildQS(appliedFilters, page) : "",
+        [appliedFilters, page]
+    );
+
+    // Indica se ha mudancas nao aplicadas
+    const isDirty = useMemo(() => {
+        if (!appliedFilters) return !!(filters.cnae_prefix || filters.municipio_cod || filters.q);
+        return JSON.stringify(filters) !== JSON.stringify(appliedFilters);
+    }, [filters, appliedFilters]);
+
     const hasSelectiveFilter = !!(filters.cnae_prefix || filters.municipio_cod || filters.q);
 
-    const search = () => {
-        if (!hasSelectiveFilter) {
+    const runSearch = (overrideFilters) => {
+        const f = overrideFilters || filters;
+        const sel = !!(f.cnae_prefix || f.municipio_cod || f.q);
+        if (!sel) {
             setData({ total: 0, rows: [] });
             return;
         }
+        setAppliedFilters(f);
+            };
+
+    // Quando appliedFilters/page mudam, busca
+    useEffect(() => {
+        if (!appliedFilters) return;
         setLoading(true);
         const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 90_000); // 90s timeout
+        const tid = setTimeout(() => ctrl.abort(), 90_000);
         fetch(`${API}/search?${queryString}`, { signal: ctrl.signal })
             .then(r => r.json())
             .then(d => { setData(d); setLoading(false); clearTimeout(tid); })
@@ -111,15 +131,12 @@ export default function App() {
                     setData({ total: 0, rows: [], _err: "Busca demorou demais. Adicione mais filtros (município, segmento mais específico)." });
                 }
             });
-    };
-
-    useEffect(() => { search(); }, [queryString]);
+    }, [queryString, appliedFilters]);
 
     const togglePorte = (p) => {
         setFilters(f => ({
             ...f, porte: f.porte.includes(p) ? f.porte.filter(x => x !== p) : [...f.porte, p],
         }));
-        setPage(1);
     };
 
     return (
@@ -149,7 +166,8 @@ export default function App() {
                         <input
                             type="text"
                             value={filters.q}
-                            onChange={(e) => { setFilters({ ...filters, q: e.target.value }); setPage(1); }}
+                            onChange={(e) => { setFilters({ ...filters, q: e.target.value }); }}
+                            onKeyDown={(e) => { if (e.key === "Enter") runSearch(); }}
                             placeholder="razão social ou fantasia"
                             className="w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:border-primary outline-none"
                         />
@@ -159,7 +177,7 @@ export default function App() {
                         <label className="text-xs font-bold text-gray-600 uppercase">UF</label>
                         <select
                             value={filters.uf}
-                            onChange={(e) => { setFilters({ ...filters, uf: e.target.value, municipio_cod: "" }); setMunQ(""); setPage(1); }}
+                            onChange={(e) => { setFilters({ ...filters, uf: e.target.value, municipio_cod: "" }); setMunQ(""); }}
                             className="w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:border-primary outline-none"
                         >
                             <option value="">Todos</option>
@@ -182,7 +200,7 @@ export default function App() {
                                     <li key={m.codigo}>
                                         <button
                                             className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100"
-                                            onClick={() => { setFilters({ ...filters, municipio_cod: m.codigo }); setMunQ(m.descricao); setMunRes([]); setPage(1); }}
+                                            onClick={() => { setFilters({ ...filters, municipio_cod: m.codigo }); setMunQ(m.descricao); setMunRes([]); }}
                                         >
                                             {m.descricao}
                                         </button>
@@ -192,7 +210,7 @@ export default function App() {
                         )}
                         {filters.municipio_cod && (
                             <button
-                                onClick={() => { setFilters({ ...filters, municipio_cod: "" }); setMunQ(""); setPage(1); }}
+                                onClick={() => { setFilters({ ...filters, municipio_cod: "" }); setMunQ(""); }}
                                 className="text-xs text-primary mt-1 hover:underline"
                             >
                                 Limpar município
@@ -215,7 +233,7 @@ export default function App() {
                                     <li key={c.codigo}>
                                         <button
                                             className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100"
-                                            onClick={() => { setFilters({ ...filters, cnae_prefix: c.codigo }); setCnaeQ(`${c.codigo} — ${c.descricao}`); setCnaeRes([]); setPage(1); }}
+                                            onClick={() => { setFilters({ ...filters, cnae_prefix: c.codigo }); setCnaeQ(`${c.codigo} — ${c.descricao}`); setCnaeRes([]); }}
                                         >
                                             <span className="font-mono">{c.codigo}</span> {c.descricao}
                                         </button>
@@ -225,7 +243,7 @@ export default function App() {
                         )}
                         {filters.cnae_prefix && (
                             <button
-                                onClick={() => { setFilters({ ...filters, cnae_prefix: "" }); setCnaeQ(""); setPage(1); }}
+                                onClick={() => { setFilters({ ...filters, cnae_prefix: "" }); setCnaeQ(""); }}
                                 className="text-xs text-primary mt-1 hover:underline"
                             >
                                 Limpar CNAE
@@ -247,13 +265,34 @@ export default function App() {
 
                     <div className="border-t pt-3 space-y-2">
                         <label className="flex items-center gap-2 text-sm">
-                            <input type="checkbox" checked={filters.has_phone} onChange={(e) => { setFilters({ ...filters, has_phone: e.target.checked }); setPage(1); }} />
+                            <input type="checkbox" checked={filters.has_phone} onChange={(e) => { setFilters({ ...filters, has_phone: e.target.checked }); }} />
                             Com telefone
                         </label>
                         <label className="flex items-center gap-2 text-sm">
-                            <input type="checkbox" checked={filters.has_email} onChange={(e) => { setFilters({ ...filters, has_email: e.target.checked }); setPage(1); }} />
+                            <input type="checkbox" checked={filters.has_email} onChange={(e) => { setFilters({ ...filters, has_email: e.target.checked }); }} />
                             Com email
                         </label>
+                    </div>
+
+                    <div className="border-t pt-4 sticky bottom-0 bg-white -mx-4 px-4 pb-4">
+                        <button
+                            onClick={() => runSearch()}
+                            disabled={loading || !hasSelectiveFilter}
+                            className={`w-full py-3 rounded-lg font-semibold text-sm transition flex items-center justify-center gap-2 ${
+                                loading || !hasSelectiveFilter
+                                    ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                                    : isDirty
+                                        ? "bg-primary text-white hover:bg-primary-dark shadow-md"
+                                        : "bg-primary/70 text-white hover:bg-primary"
+                            }`}
+                        >
+                            {loading
+                                ? <><span className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> Buscando...</>
+                                : <>🔍 Buscar leads {isDirty && <span className="text-xs opacity-75">(filtros novos)</span>}</>}
+                        </button>
+                        {!hasSelectiveFilter && (
+                            <p className="text-xs text-gray-400 mt-2 text-center">Escolha um segmento ou município primeiro</p>
+                        )}
                     </div>
                 </aside>
 
@@ -269,9 +308,10 @@ export default function App() {
                                     <button
                                         key={p.id}
                                         onClick={() => {
-                                            setFilters(f => ({ ...f, cnae_prefix: active ? "" : p.cnae }));
+                                            const newF = { ...filters, cnae_prefix: active ? "" : p.cnae };
+                                            setFilters(newF);
                                             setCnaeQ(active ? "" : `${p.cnae} — ${p.label}`);
-                                            setPage(1);
+                                            runSearch(newF);
                                         }}
                                         className={`px-3 py-2 rounded-lg text-xs text-left border transition ${
                                             active
