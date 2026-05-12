@@ -150,12 +150,30 @@ export default function App() {
                         </p>
                     )}
                 </div>
-                <a
-                    href={`${API}/export.csv?${queryString}&max=50000`}
-                    className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark text-sm font-semibold"
-                >
-                    Exportar CSV
-                </a>
+                <div className="flex gap-2">
+                    <a
+                        href={appliedFilters ? `${API}/export.xlsx?${queryString}&max=50000` : "#"}
+                        onClick={(e) => { if (!appliedFilters) e.preventDefault(); }}
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 ${
+                            appliedFilters
+                                ? "bg-primary text-white hover:bg-primary-dark"
+                                : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                        }`}
+                    >
+                        📊 Baixar Excel
+                    </a>
+                    <a
+                        href={appliedFilters ? `${API}/export.csv?${queryString}&max=50000` : "#"}
+                        onClick={(e) => { if (!appliedFilters) e.preventDefault(); }}
+                        className={`px-3 py-2 rounded-lg text-xs font-semibold ${
+                            appliedFilters
+                                ? "border border-primary text-primary hover:bg-primary/10"
+                                : "border border-gray-200 text-gray-400 cursor-not-allowed"
+                        }`}
+                    >
+                        CSV
+                    </a>
+                </div>
             </header>
 
             <div className="flex">

@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import pg from "pg";
+import ExcelJS from "exceljs";
 
 const PORT = Number(process.env.PORT || 3000);
 const DB_URL = process.env.DATABASE_URL;
@@ -144,6 +145,82 @@ app.get("/export.csv", async (req, reply) => {
     }
     reply.raw.end();
 });
+
+app.get("/export.xlsx", async (req, reply) => {
+    const q = req.query;
+    const { sql: where, params } = buildWhere(q);
+    const maxRows = Math.min(50_000, Number(q.max || 50_000));
+
+    const sql = `
+        SELECT ${SELECT_COLS}
+        ${FROM_JOIN}
+        ${where}
+        LIMIT ${maxRows}
+    `;
+    const res = await pool.query(sql, params);
+
+    const wb = new ExcelJS.stream.xlsx.WorkbookWriter({
+        stream: reply.raw,
+        useStyles: true,
+        useSharedStrings: false,
+    });
+    const ws = wb.addWorksheet("Leads", {
+        views: [{ state: "frozen", ySplit: 1 }],
+    });
+
+    const cols = [
+        { header: "CNPJ", key: "cnpj", width: 22 },
+        { header: "Razão Social", key: "razao_social", width: 38 },
+        { header: "Fantasia", key: "nome_fantasia", width: 30 },
+        { header: "Porte", key: "porte", width: 10 },
+        { header: "Capital Social", key: "capital_social", width: 14 },
+        { header: "CNAE", key: "cnae_codigo", width: 10 },
+        { header: "Atividade", key: "cnae_descricao", width: 42 },
+        { header: "Telefone", key: "telefone", width: 18 },
+        { header: "Email", key: "email", width: 30 },
+        { header: "Logradouro", key: "logradouro", width: 32 },
+        { header: "Número", key: "numero", width: 10 },
+        { header: "Complemento", key: "complemento", width: 18 },
+        { header: "Bairro", key: "bairro", width: 22 },
+        { header: "Município", key: "municipio", width: 22 },
+        { header: "UF", key: "uf", width: 5 },
+        { header: "CEP", key: "cep", width: 12 },
+        { header: "Data Abertura", key: "data_abertura", width: 14 },
+    ];
+    ws.columns = cols;
+
+    // Estilo header (rose-gold da Seenup)
+    const headerRow = ws.getRow(1);
+    headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFB08D7E" } };
+    headerRow.alignment = { vertical: "middle", horizontal: "left" };
+    headerRow.height = 22;
+    headerRow.commit();
+
+    const formatCnpj = (c) => c && c.length === 14
+        ? `${c.slice(0,2)}.${c.slice(2,5)}.${c.slice(5,8)}/${c.slice(8,12)}-${c.slice(12)}`
+        : c;
+    const formatCep = (c) => c && c.length === 8 ? `${c.slice(0,5)}-${c.slice(5)}` : c;
+    const formatDate = (d) => d && d.length === 8 ? `${d.slice(6,8)}/${d.slice(4,6)}/${d.slice(0,4)}` : d;
+
+    for (const row of res.rows) {
+        ws.addRow({
+            ...row,
+            cnpj: formatCnpj(row.cnpj),
+            cep: formatCep(row.cep),
+            data_abertura: formatDate(row.data_abertura),
+        }).commit();
+    }
+
+    // Auto-filter no range completo
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: res.rows.length + 1, column: cols.length } };
+
+    const ts = new Date().toISOString().slice(0, 10);
+    reply.header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    reply.header("Content-Disposition", `attachment; filename="leads_${ts}.xlsx"`);
+    await wb.commit();
+});
+
 
 app.get("/lookups/cnaes", async (req) => {
     const q = String(req.query.q || "").trim();
